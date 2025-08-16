@@ -1,0 +1,161 @@
+    ### SUMMARISE
+    translation_template = '''You are given a the call transcript of a customer phoning in to ask something.
+                            {body}
+                            Follow the following rules:
+                            1) Focus on the main issues being spoken about in the conversation.
+                            2) Do not focus on the conversational aspects like hello, how are you, goodbye.
+                            3) Ensure names of people or companies are not included directly. replace with the word "Company/Person"
+                            4) Ensure email addresses and telephone number are not included.
+                            5) Don't state that you are summarizing it. Just provide the summary.
+                            
+                          '''
+    
+    
+    translation_prompt = PromptTemplate(input_variables=["body"],
+                                 template=translation_template)
+
+    translation_chain = translation_prompt | chatopenai | StrOutputParser()
+    
+    
+    level_1_template = '''You are given a summary of a voice chat where a customer is complaining about something.
+                        {translation}
+                        
+                        Your task is to do the following:
+                
+                        Label the customer feedback with one or more of the topic labels as mentioned below:
+                         
+                        
+                        [Email problems, License Issues, Login Issues, System & Access Issues, Technical & Communication Issues ]
+                         
+                        Here are some descriptions for each topic to help you choose:
+                        Email Problems – Covers all issues related to sending, receiving, and configuring email services.
+                        License Issues – Includes problems with license activation, allocation, cancellation, and renewal.
+                        Login Issues – Focuses on account access problems including credentials, MFA, and portal login.
+                        System & Access Issues – Encompasses setup, permissions, and external communication restrictions.
+                        Technical & Communication Issues – Relates to support handling, meeting coordination, and unresolved technical matters.
+                        Other- It is tagged as this when there are no other level 1's that feel relevant
+                                                                               
+                        In the response, do not provide any explanations.
+                        Remove any labels that aren't in your given categories.
+
+                        Return the final labels after making sure all the above rules are satisfied.
+                        
+                        Format the labels as a list of comma-separated values each within double quotes, like a python list.
+                        The values within double quotes should be lowercase. eg: ["screen damage", "power"]
+                        '''             
+
+    level_1_prompt = PromptTemplate(input_variables=["translation"],
+                                 template=level_1_template)
+    
+
+
+    level_1_chain = level_1_prompt | chatopenai | StrOutputParser()
+    
+    ### level 2 ONE CATEGORY PER VERBATIM
+    level_2_template = '''You are given a customer complaint based off a customer feedback survey response for a telecommunications company (Vodafone):                      
+                        {translation}
+                        
+                        You are also given the following high level topic labels (level 1):
+                        {level_1}
+                        
+                        Your task is to do the following:  
+                        Add secondary, more detailed labels to further describe it.
+                        These secondary labels are sub-categories of the high level topic labels you are given as input.
+                
+
+        
+                        Follow the rules below to assign level 2 labels:
+                        
+                        If the input labels include 'Email Problems' then choose one or more of the following: Missing or undelivered emails, Email setup/configuration issues, Spam/incorrect routing, Email address changes, Delayed email reception, Other.
+                        If the input labels include 'License Issues' then choose one or more of the following: License activation problems, License cancellations/renewals, License allocation errors, License key/GDPR consent issues, Additional license requests, Other.
+                        If the input labels include 'Login Issues' then choose one or more of the following: Account login/logout problems, Password resets & credentials, Multi-factor authentication issues, Old/new account conflicts, Service portal access issues, Other.
+                        If the input labels include 'System & Access Issues' then choose one or more of the following: GDAP/GDPR consent issues, External communication problems, Teams/Outlook access issues, Data migration/setup requests, Device management restrictions, Other.
+                        If the input labels include 'Technical and Communication Issues' then choose one or more of the following: Call/meeting availability problems, Setup or configuration difficulties, Delays & missing information, Escalations & unresolved issues, External communication failures, Other.
+                        
+                        Some defintions of the level 2's:
+                        
+                        Email Problems
+
+                            Missing or undelivered emails – Emails not received, sent to wrong address, or failing to deliver.
+
+                            Email setup/configuration issues – Problems with configuring email clients, forwarding, or syncing.
+
+                            Spam/incorrect routing – Legitimate emails marked as spam or routed incorrectly.
+
+                            Email address changes – Complications after changing email addresses in the system.
+
+                            Delayed email reception – Emails received late or after long delays.
+
+                        License Issues
+
+                            License activation problems – Failure to activate new or existing licenses.
+
+                            License cancellations/renewals – Requests or disputes over license cancellation or renewal.
+
+                            License allocation errors – Licenses assigned to wrong users or accounts.
+
+                            License key/GDPR consent issues – Missing license keys or required GDPR/GDAP approvals.
+
+                            Additional license requests – Need for more licenses to cover additional users.
+
+                        Login Issues
+
+                            Account login/logout problems – Trouble logging into or out of accounts.
+
+                            Password resets & credentials – Forgotten, expired, or incorrect passwords.
+
+                            Multi-factor authentication issues – Difficulties setting up or passing MFA prompts.
+
+                            Old/new account conflicts – Confusion or lockout caused by multiple account profiles.
+
+                            Service portal access issues – Unable to log into Vodafone's or Microsoft's service portals.
+
+                        System and Access Issues
+
+                            GDAP/GDPR consent issues – Missing or incorrect admin consent emails for Vodafone/Microsoft access.
+
+                            External communication problems – Inability to chat, call, or collaborate with external organizations.
+
+                            Teams/Outlook access issues – Problems accessing Microsoft Teams or Outlook functionality.
+
+                            Data migration/setup requests – Assistance needed for tenant migration or initial setup.
+
+                            Device management restrictions – Access limited by Intune, Company Portal, or security policies.
+
+                        Technical and Communication Issues
+
+                            Call/meeting availability problems – Delays or inability to connect with support or attend meetings.
+
+                            Setup or configuration difficulties – General technical issues with setup or configuration.
+
+                            Delays & missing information – Waiting on data, confirmations, or responses.
+
+                            Escalations & unresolved issues – Cases requiring escalation or remaining open without resolution.
+
+                            External communication failures – Failure to establish working contact with external parties.
+                        
+                    
+                        If the complaint does not match any of the given categories then just return 'other'. 
+                        
+                        
+                        Rules:
+                        Ensure that the use the level 1 label to choose the relevant level 2 labels.
+                        Ensure that every level 1 label has a level 2 that is relevant
+                        Remove any labels that aren't in your given categories, do not make any new labels.
+                        If you have made up new labels that aren't in the allowed categories, replace them with 'other'.
+                        Remove any labels that do not match the context of the input summary.
+                        Don't select every level 2 if you are unsure about which one to choose. In this case choose other
+                        
+                        
+                        In the response, do not provide any explanations.
+                        Format the response to be a dictionary with level 1 as the keys and the respective level 2s as the values in a list format inside double quotes.
+                        Example output 1:
+                        "screen damage": ["black screen, broken screen"],
+                        "Power": ["switching on", "switching off"]
+                        Example output 2:
+                        "other": ["other"]
+                    
+                        
+            
+                        DICTIONARY:
+                        '''      
