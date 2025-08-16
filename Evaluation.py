@@ -35,6 +35,7 @@ class EvaluationState(TypedDict):
     l1_reasoning: str
     l2_evaluation: str
     l2_reasoning: str
+    suggested_improvements: str
     comment: str
 
 def get_evaluation_prompt(generated_context):
