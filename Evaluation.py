@@ -62,7 +62,11 @@ Use the following topic hierarchy mentioned in the context to detrmine whether t
   - yes: All labels (for the respective level) are accurate and complete.
   - partially yes: At least one label is correct, but some are missing, extra, or slightly inaccurate.
   - no: Labels are wrong, irrelevant, or violate the topic hierarchy and rules.
-- Do NOT provide recommendations or suggest alternative labels. Only evaluate the assigned labels as provided.
+- **Topic Structure Improvements**: Based on this complaint and your evaluation, suggest specific improvements to the overall topic hierarchy that could enhance classification performance. Consider:
+  - Missing Level 1 or Level 2 categories that would better capture this type of issue
+  - Overlapping or confusing category definitions that should be clarified
+  - Suggested new subcategories or refinements to existing ones
+  - Rule modifications that would improve accuracy
 - Ensure the output is valid JSON with the exact structure shown below.
 
 Output in JSON format (use double quotes and proper JSON syntax):
@@ -70,7 +74,8 @@ Output in JSON format (use double quotes and proper JSON syntax):
   "l1_evaluation": "yes|partially yes|no",
   "l1_reasoning": "Explain why the Level 1 labels are accurate or not, based on the complaint and the topic definitions.",
   "l2_evaluation": "yes|partially yes|no",
-  "l2_reasoning": "Explain why the Level 2 labels are accurate or not, based on the complaint and the topic definitions"
+  "l2_reasoning": "Explain why the Level 2 labels are accurate or not, based on the complaint and the topic definitions.",
+  "suggested_improvements": "Based on this complaint, suggest specific improvements to the topic hierarchy structure that would enhance overall classification performance. If no improvements needed, state 'No improvements suggested for this case.'"
 }}}}
 """)
 
