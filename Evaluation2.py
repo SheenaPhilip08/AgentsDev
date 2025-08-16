@@ -57,25 +57,22 @@ Assigned Level 2 topics: {{assigned_l2}}
 - Summaries may have **multiple Level 1 topics**, and each Level 1 topic may have **multiple Level 2 subcategories**.
 - **Level 1 Evaluation**: Determine if all assigned Level 1 topics in {{assigned_l1}} accurately reflect the complaint's issues and align with the Level 1 topic definitions (Email Problems, License Issues, Login Issues, System & Access Issues, Technical & Communication Issues, Other). Check if any relevant Level 1 topics are missing or if any assigned topics are irrelevant.
 - **Level 2 Evaluation**: For each assigned Level 1 topic, verify if the corresponding Level 2 topics in {{assigned_l2}} are valid subcategories, align with the complaint's details, and match the Level 2 definitions. Ensure every Level 1 topic has relevant Level 2 topics; replace invalid labels with "Other" if specified in the context.
-- **Evaluation Outcomes**:
-  - **yes**: All labels for the level are accurate and complete.
-  - **partially yes**: At least one label is correct, but some are missing, extra, or slightly inaccurate.
-  - **no**: Labels are wrong, irrelevant, or violate the topic hierarchy.
-- Do NOT provide recommendations, suggest alternative labels, or include any text outside the JSON object.
-- Return **only** a valid JSON object with the exact structure shown below. Do not include markdown (e.g., ```json), code fences, comments, explanations, or any additional text. Ensure the JSON is complete and properly formatted.
-- The response must be a complete, valid JSON object that begins with a curly brace {{ and concludes with a curly brace }}.
-- Do not return partial responses, incomplete JSON, or just individual keys.
-- Do not include any text that references "starts with" or "ends with" in your response.
+**Evaluation Outcomes**:
+- **yes**: All labels for the level are accurate and complete.
+- **partially yes**: At least one label is correct, but some are missing, extra, or slightly inaccurate.
+- **no**: Labels are wrong, irrelevant, or violate the topic hierarchy.
 
-**Output Format**:
+**IMPORTANT**: Respond ONLY with a JSON object. No other text.
+
+Example response:
 {{
-  "l1_evaluation": "yes|partially yes|no",
-  "l1_reasoning": "Explain why the Level 1 labels are accurate or not, based on the complaint and topic definitions.",
-  "l2_evaluation": "yes|partially yes|no",
-  "l2_reasoning": "Explain why the Level 2 labels are accurate or not, based on the complaint and topic definitions."
+  "l1_evaluation": "yes",
+  "l1_reasoning": "The assigned Level 1 topics correctly identify the main issues in the complaint.",
+  "l2_evaluation": "partially yes", 
+  "l2_reasoning": "Most Level 2 topics are appropriate but one is missing."
 }}
 
-**CRITICAL**: Your response must be EXACTLY in the above JSON format. Do not add any text before or after the JSON object. Do not reference this instruction in your response. Simply provide the JSON object with the four required fields.
+Your actual response (use the exact same structure):
 """)
 
 def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
@@ -133,12 +130,18 @@ def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
                 continue
             
             # Pattern 2: ' and ends with ' - LLM interpreting prompt instructions literally
-            # Be more specific to avoid false positives
-            if ((" and ends with " in response_content) or 
-                (response_content.strip() == "and ends with") or
-                (response_content.strip().startswith("starts with")) or
-                (response_content.strip().endswith("and ends with"))):
-                logger.warning(f"Response contains prompt instruction text: '{response_content[:100]}...'. Requesting retry.")
+            # Be more aggressive in detecting this pattern
+            problematic_phrases = [
+                "and ends with",
+                "starts with", 
+                "ends with",
+                "Your actual response",
+                "use the exact same structure",
+                "Example response"
+            ]
+            
+            if any(phrase in response_content.lower() for phrase in problematic_phrases):
+                logger.warning(f"Response contains instruction text: '{response_content[:100]}...'. Requesting retry.")
                 continue
             
             # More careful handling of leading/trailing quotes - only remove if not part of valid JSON
@@ -318,7 +321,7 @@ def preprocess_excel(file_name: str) -> pd.DataFrame:
     return df
 
 def process_row(row, llm_type: str, evaluation_prompt, project_id: str, location: str):
-    llm_client = ChatVertexAI(model_name="gemini-2.5-flash", project=project_id, location=location, temperature=0, max_output_tokens=2048)
+    llm_client = ChatVertexAI(model_name="gemini-1.5-flash", project=project_id, location=location, temperature=0, max_output_tokens=2048)
     app = create_workflow(evaluation_prompt)
     state = EvaluationState(
         summary=str(row["summary"]),
