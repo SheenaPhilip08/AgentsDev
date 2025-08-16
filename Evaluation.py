@@ -80,15 +80,30 @@ def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
         assigned_l1=state["assigned_l1"],
         assigned_l2=state["assigned_l2"]
     )
-    try:
-        messages = [HumanMessage(content=prompt)]
-        response = llm_client.invoke(messages)
-        response_content = response.content
-        response_content = re.sub(r'^```json\s*|\s*```$', '', response_content, flags=re.MULTILINE).strip()
-        response_content = re.sub(r',([}\]])', r'\1', response_content)
-        response_content = re.sub(r'[^\x20-\x7E]', '', response_content)
-        logger.debug(f"Cleaned {llm_type} response: {response_content}")
-        result = json.loads(response_content)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            messages = [HumanMessage(content=prompt)]
+            response = llm_client.invoke(messages)
+            response_content = response.content
+            
+            # Clean the response more thoroughly
+            response_content = response_content.strip()
+            response_content = re.sub(r'^```json\s*|\s*```$', '', response_content, flags=re.MULTILINE).strip()
+            response_content = re.sub(r',([}\]])', r'\1', response_content)
+            response_content = re.sub(r'[^\x20-\x7E\n]', '', response_content)  # Keep newlines
+            
+            logger.debug(f"Cleaned {llm_type} response (attempt {attempt + 1}): {response_content}")
+            result = json.loads(response_content)
+            
+            # Validate required fields
+            required_fields = ["l1_evaluation", "l1_reasoning", "l2_evaluation", "l2_reasoning"]
+            if all(field in result for field in required_fields):
+                break  # Success
+            else:
+                logger.warning(f"Missing required fields in response on attempt {attempt + 1}")
+                if attempt == max_retries - 1:
+                    raise json.JSONDecodeError("Missing required fields", response_content, 0)
     except json.JSONDecodeError as e:
         logger.error(f"JSONDecodeError for {llm_type} LLM, summary '{state['summary']}': {e}")
         logger.error(f"Raw response: {response_content}")
@@ -218,7 +233,16 @@ def preprocess_excel(file_name: str) -> pd.DataFrame:
 
 def process_row(row, llm_type: str, evaluation_prompt, project_id: str, location: str):
     # Create a new LLM client for each thread to ensure thread safety
-    llm_client = ChatVertexAI(model_name="gemini-1.5-flash", project=project_id, location=location, temperature=0, max_output_tokens=2048)
+    llm_client = ChatVertexAI(
+        model_name="gemini-1.5-flash", 
+        project=project_id, 
+        location=location, 
+        temperature=0,
+        max_output_tokens=2048,
+        top_p=0.1,  # More deterministic sampling
+        top_k=1,    # Most deterministic setting
+        # Note: Vertex AI doesn't support seed parameter, but these settings maximize determinism
+    )
     app = create_workflow(evaluation_prompt)
     
     state = EvaluationState(
@@ -352,109 +376,6 @@ def evaluate_complaints(file_name: str, evaluation_prompt) -> pd.DataFrame:
     
     return result_df
 
-def generate_improvement_suggestions(result_df: pd.DataFrame, generated_context: str) -> str:
-    """
-    Generate overall topic structure improvement suggestions based on all evaluations
-    """
-    if result_df.empty:
-        return "No data available for improvement analysis."
-    
-    # Analyze patterns in the evaluation results
-    l1_issues = result_df[result_df["L1_Evaluation"] != "yes"]
-    l2_issues = result_df[result_df["L2_Evaluation"] != "yes"]
-    
-    # Prepare summary data for the LLM
-    total_complaints = len(result_df)
-    l1_accuracy = len(result_df[result_df["L1_Evaluation"] == "yes"]) / total_complaints * 100
-    l2_accuracy = len(result_df[result_df["L2_Evaluation"] == "yes"]) / total_complaints * 100
-    
-    # Sample problematic cases
-    problem_cases = []
-    for _, row in l1_issues.head(5).iterrows():
-        problem_cases.append({
-            "summary": row["summary"][:200] + "..." if len(row["summary"]) > 200 else row["summary"],
-            "assigned_l1": row["assigned_l1"],
-            "assigned_l2": row["assigned_l2"],
-            "l1_reasoning": row["L1_Reasoning"],
-            "l2_reasoning": row["L2_Reasoning"]
-        })
-    
-    improvement_prompt = f"""
-You are an expert in topic classification systems. Based on the evaluation results of {total_complaints} customer complaints, provide recommendations to improve the overall topic hierarchy structure.
-
-**Current Performance:**
-- Level 1 Accuracy: {l1_accuracy:.1f}%
-- Level 2 Accuracy: {l2_accuracy:.1f}%
-
-**Current Topic Structure:**
-{generated_context}
-
-**Sample Problematic Cases:**
-{json.dumps(problem_cases, indent=2)}
-
-**Analysis Request:**
-Based on the performance data and problematic cases, provide specific recommendations to improve the topic classification system:
-
-1. **Missing Categories**: What new Level 1 or Level 2 topics should be added?
-2. **Overlapping Categories**: Which existing categories cause confusion and how should they be refined?
-3. **Definition Improvements**: How can category definitions be clarified?
-4. **Rule Modifications**: What tagging rules should be adjusted?
-5. **Structural Changes**: Should any categories be merged, split, or reorganized?
-
-Provide actionable recommendations that would improve classification accuracy and consistency.
-
-**Output Format:**
-Provide a clear, structured analysis with specific recommendations for improving the topic hierarchy.
-"""
-
-    try:
-        llm_client = ChatVertexAI(
-            model_name="gemini-1.5-flash", 
-            project=PROJECT_ID, 
-            location=LOCATION, 
-            temperature=0.3,  # Slightly higher for more creative suggestions
-            max_output_tokens=3000
-        )
-        
-        response = llm_client.invoke([HumanMessage(content=improvement_prompt)])
-        return response.content
-        
-    except Exception as e:
-        logger.error(f"Failed to generate improvement suggestions: {e}")
-        return f"Error generating improvement suggestions: {str(e)}"
-
-def run_evaluation_with_improvements(prompt_txt_file: str, excel_file: str) -> pd.DataFrame:
-    """
-    Run the complete evaluation process and generate improvement suggestions
-    """
-    print("Starting evaluation with improvement analysis...")
-    
-    # Generate context from prompt file
-    generated_context = read_prompt_and_summarize(prompt_txt_file)
-    evaluation_prompt = get_evaluation_prompt(generated_context)
-    
-    # Run the main evaluation
-    result_df = evaluate_complaints(excel_file, evaluation_prompt)
-    
-    if not result_df.empty:
-        print("\n" + "="*80)
-        print("TOPIC STRUCTURE IMPROVEMENT SUGGESTIONS")
-        print("="*80)
-        
-        # Generate improvement suggestions based on results
-        improvements = generate_improvement_suggestions(result_df, generated_context)
-        print(improvements)
-        
-        # Save improvements to file
-        with open("topic_improvement_suggestions.txt", "w") as f:
-            f.write("TOPIC STRUCTURE IMPROVEMENT SUGGESTIONS\n")
-            f.write("="*50 + "\n\n")
-            f.write(improvements)
-        
-        print(f"\nImprovement suggestions saved to: topic_improvement_suggestions.txt")
-    
-    return result_df
-
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage: python Evaluation.py <prompt_txt_file> <excel_file>")
@@ -464,17 +385,22 @@ if __name__ == "__main__":
     prompt_file = sys.argv[1]
     excel_file = sys.argv[2]
     
-    print(f"Running evaluation with improvement analysis:")
+    print(f"Running evaluation:")
     print(f"  Prompt file: {prompt_file}")
     print(f"  Excel file: {excel_file}")
     print("-" * 50)
     
     try:
-        result_df = run_evaluation_with_improvements(prompt_file, excel_file)
+        # Generate context from prompt file
+        generated_context = read_prompt_and_summarize(prompt_file)
+        evaluation_prompt = get_evaluation_prompt(generated_context)
+        
+        # Run the main evaluation
+        result_df = evaluate_complaints(excel_file, evaluation_prompt)
+        
         if not result_df.empty:
             print(f"\nEvaluation completed successfully!")
             print(f"Results saved to: evaluated_complaints_gemini.xlsx")
-            print(f"Improvement suggestions saved to: topic_improvement_suggestions.txt")
         else:
             print("No results generated. Check your input files and credentials.")
     except Exception as e:
