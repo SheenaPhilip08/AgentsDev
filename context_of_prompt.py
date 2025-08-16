@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 logging.getLogger("langchain_google_vertexai").setLevel(logging.DEBUG)
 
 # Initialize Vertex AI for Gemini
-PROJECT_ID = "vf-grp-aib-prd-cmr-cxi-lab"
-LOCATION = "europe-west1"
+PROJECT_ID = "XX"
+LOCATION = "XX"
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 # Initialize Gemini 2.5 Flash model
