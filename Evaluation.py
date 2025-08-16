@@ -209,10 +209,32 @@ def preprocess_excel(file_name: str) -> pd.DataFrame:
             except (json.JSONDecodeError, ValueError) as e:
                 return {}
         return {}
+    def parse_level_1(x: Union[str, list]) -> List[str]:
+        """Parse the level_1 column which contains the actual Level 1 assignments"""
+        if isinstance(x, list):
+            return x
+        if isinstance(x, str):
+            try:
+                # Handle JSON string format like '["login issues", "technical & communication issues"]'
+                if x.strip().startswith('[') and x.strip().endswith(']'):
+                    result = json.loads(x)
+                    return result if isinstance(result, list) else []
+                # Handle single item in quotes
+                elif x.strip().startswith('"') and x.strip().endswith('"'):
+                    return [x.strip().strip('"')]
+                # Handle plain text
+                else:
+                    return [x.strip()] if x.strip() and x.strip().lower() != 'nan' else []
+            except (json.JSONDecodeError, ValueError):
+                return []
+        return []
+    
     def extract_level_1(x: Dict[str, List[str]]) -> List[str]:
         return list(x.keys())
+    
     df['assigned_l2'] = df['L1_L2_dict'].apply(parse_L1_L2_dict)
-    df['assigned_l1'] = df['assigned_l2'].apply(extract_level_1)
+    # Use the level_1 column directly instead of extracting from L1_L2_dict
+    df['assigned_l1'] = df['level_1'].apply(parse_level_1)
     df['summary'] = df['summary'].astype(str)
     df['comment'] = df['comment'].astype(str)
     required_columns = ['summary', 'assigned_l1', 'assigned_l2', 'L1: Actual Answer', 'L2:Actual Answer', 'comment']
