@@ -145,11 +145,26 @@ def preprocess_excel(file_name: str) -> pd.DataFrame:
         
         logger.debug(f"Original JSON string: {s}")
         
+        # Remove outer quotes if present (handles quoted JSON strings)
+        s = s.strip()
+        if s.startswith('"') and s.endswith('"'):
+            s = s[1:-1]
+        elif s.startswith("'") and s.endswith("'"):
+            s = s[1:-1]
+        
+        # Fix escaped quotes from JSON-within-JSON
+        s = s.replace('\\"', '"').replace("\\'", "'")
+        
         # Remove markdown code fences and nested braces
-        s = re.sub(r'^\s*```json\s*|\s*```\s*$', '', s, flags=re.MULTILINE).strip()
+        s = re.sub(r'^\s*```json\s*', '', s, flags=re.MULTILINE)
+        s = re.sub(r'\s*```\s*$', '', s, flags=re.MULTILINE)
         s = s.replace('{```json', '{').replace('```}', '}')
         s = s.replace('{\n{', '{').replace('}\n}', '}')
         logger.debug(f"After removing markdown and braces: {s}")
+        
+        # Fix double quotes issue: ""key"" -> "key"
+        s = re.sub(r'""([^"]*?)""', r'"\1"', s)
+        logger.debug(f"After fixing double quotes: {s}")
         
         # Replace single quotes with double quotes
         s = s.replace("'", '"')
@@ -160,43 +175,26 @@ def preprocess_excel(file_name: str) -> pd.DataFrame:
         logger.debug(f"After fixing trailing commas: {s}")
         
         # Quote unquoted keys (e.g., hardware/software -> "hardware/software")
-        s = re.sub(r'([{,]\s*)(\w+/\w+|\w+)(?=\s*:)', r'\1"\2"', s)
+        s = re.sub(r'([{,]\s*)(\w+[^":\s]*?)(?=\s*:)', r'\1"\2"', s)
         logger.debug(f"After quoting keys: {s}")
         
-        # Clean and quote list values
-        def clean_list_values(match):
-            raw_items = match.group(1).split(',')
-            cleaned_items = []
-            for item in raw_items:
-                item = item.strip()
-                if not item:
-                    continue
-                item = re.sub(r'"*', '', item)
-                item = item.replace('  ', ' ').strip()
-                if ' ' in item:
-                    item = ' '.join(word for word in item.split() if word)
-                if item:
-                    cleaned_items.append(f'"{item}"')
-            result = ': [' + ','.join(cleaned_items) + ']'
-            return result
-        s = re.sub(r':\s*\[([^\]]*?)\]', clean_list_values, s)
-        if 'positive' in s.lower():
-            return '{"positive": ["positive"]}'
-        pattern = r'("[^"]+": \["[^"]+"(?:,"[^"]+")*\])'
-        match = re.search(pattern, s)
-        if match:
-            s = '{' + match.group(1) + '}'
-        s = '{' + s + '}' if not s.startswith('{') else s
+        # Try to parse the cleaned JSON
         try:
             parsed = json.loads(s)
             return json.dumps(parsed)
         except json.JSONDecodeError as e:
+            logger.debug(f"First JSON parse failed: {e}")
+            
+            # Fallback: try ast.literal_eval
             try:
                 parsed = ast.literal_eval(s)
                 if isinstance(parsed, dict):
                     return json.dumps(parsed)
-            except (ValueError, SyntaxError):
-                pass
+            except (ValueError, SyntaxError) as e2:
+                logger.debug(f"AST parse also failed: {e2}")
+                
+            # Final fallback: return empty dict
+            logger.warning(f"Could not parse JSON string: {s}")
             return '{}'
     def parse_L1_L2_dict(x: Union[str, dict]) -> Dict[str, List[str]]:
         if isinstance(x, dict):
