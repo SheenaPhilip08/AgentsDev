@@ -234,7 +234,7 @@ def preprocess_excel(file_name: str) -> pd.DataFrame:
 def process_row(row, llm_type: str, evaluation_prompt, project_id: str, location: str):
     # Create a new LLM client for each thread to ensure thread safety
     llm_client = ChatVertexAI(
-        model_name="gemini-1.5-flash", 
+        model_name="gemini-2.5-pro", 
         project=project_id, 
         location=location, 
         temperature=0,
