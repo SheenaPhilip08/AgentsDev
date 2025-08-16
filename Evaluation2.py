@@ -23,8 +23,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("langchain_google_vertexai").setLevel(logging.DEBUG)
 
 # Initialize Vertex AI
-PROJECT_ID = "XXX"
-LOCATION = "XXX"
+PROJECT_ID = "vf-grp-aib-prd-cmr-cxi-lab"  # Use your actual project ID
+LOCATION = "europe-west1"  # Use your preferred location
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 class EvaluationState(TypedDict):
@@ -395,3 +395,28 @@ def run_evaluation(prompt_txt_file: str, excel_file: str) -> pd.DataFrame:
     evaluation_prompt = get_evaluation_prompt(generated_context)
     result_df = evaluate_complaints(excel_file, evaluation_prompt)
     return result_df
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Usage: python Evaluation2.py <prompt_txt_file> <excel_file>")
+        print("Example: python Evaluation2.py tagging_prompt.txt CleanedDatasets/trial.xlsx")
+        sys.exit(1)
+    
+    prompt_file = sys.argv[1]
+    excel_file = sys.argv[2]
+    
+    print(f"Running evaluation with:")
+    print(f"  Prompt file: {prompt_file}")
+    print(f"  Excel file: {excel_file}")
+    print("-" * 50)
+    
+    try:
+        result_df = run_evaluation(prompt_file, excel_file)
+        if not result_df.empty:
+            print(f"\nEvaluation completed successfully!")
+            print(f"Results saved to: evaluated_complaints_gemini.xlsx")
+        else:
+            print("No results generated. Check your input files and credentials.")
+    except Exception as e:
+        print(f"Error during evaluation: {e}")
+        sys.exit(1)

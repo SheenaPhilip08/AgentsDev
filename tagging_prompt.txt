@@ -1,0 +1,97 @@
+Customer Support Topic Classification System
+
+This system classifies customer support interactions into hierarchical topics to identify patterns and improve service quality. The classification uses two levels: Level 1 (high-level categories) and Level 2 (specific subcategories).
+
+LEVEL 1 TOPICS:
+
+1. Email Problems
+   - Issues related to email functionality, access, or configuration
+
+2. License Issues  
+   - Problems with software licensing, activation, or renewal
+
+3. Login Issues
+   - Authentication, password, and access credential problems
+
+4. System & Access Issues
+   - System functionality, permissions, and general access problems
+
+5. Technical & Communication Issues
+   - Technical difficulties, communication problems, and setup issues
+
+6. Other
+   - Issues that don't fit into the above categories
+
+LEVEL 2 TOPICS:
+
+Email Problems:
+- Email delivery problems: Messages not being sent or received
+- Email configuration issues: Setup and account configuration problems
+- Email access problems: Cannot access email account or interface
+- Outlook/client issues: Problems with specific email clients
+- Other: Email-related issues not covered above
+
+License Issues:
+- License activation problems: Cannot activate or validate licenses
+- License renewal issues: Problems with license renewal process
+- License assignment problems: Issues assigning licenses to users
+- License compatibility issues: Software compatibility with current licenses
+- Other: License-related issues not covered above
+
+Login Issues:
+- Password resets & credentials: Password problems and credential issues
+- Account login/logout problems: General authentication difficulties
+- Service portal access issues: Problems accessing specific service portals
+- Multi-factor authentication issues: MFA setup or validation problems
+- Other: Login-related issues not covered above
+
+System & Access Issues:
+- GDAP/GDPR consent issues: Permission and consent-related problems
+- System performance problems: Slow or unresponsive systems
+- Data access issues: Problems accessing specific data or files
+- Permission/role issues: Insufficient permissions or role problems
+- Other: System access issues not covered above
+
+Technical & Communication Issues:
+- Call/meeting availability problems: Issues with calls or meeting access
+- Setup or configuration difficulties: Technical setup and configuration issues
+- Delays & missing information: Information or response delays
+- Escalations & unresolved issues: Problems requiring escalation or remaining unresolved
+- Hardware/software problems: Technical equipment or software issues
+- Other: Technical communication issues not covered above
+
+GENERAL TAGGING RULES:
+
+1. Focus on the primary issue described in the complaint
+2. Multiple Level 1 topics can be assigned if the complaint covers multiple areas
+3. Each Level 1 topic must have at least one corresponding Level 2 topic
+4. Use "Other" subcategories when the specific issue doesn't match defined subcategories
+5. Only tag issues that are clearly described in the complaint text
+6. Avoid inferring issues not explicitly mentioned
+
+CONDITIONAL LABELING RULES:
+
+Login Issues (Level 1):
+- Use only when authentication, passwords, or access credentials are explicitly mentioned
+- If password reset is mentioned, always include "Password resets & credentials" (Level 2)
+
+Technical & Communication Issues (Level 1):
+- Use when technical difficulties, setup problems, or communication issues are described
+- For meeting/call problems, use "Call/meeting availability problems" (Level 2)
+- For configuration issues, use "Setup or configuration difficulties" (Level 2)
+
+System & Access Issues (Level 1):
+- Use for system-wide problems, permissions, or general access issues
+- For GDAP/consent mentions, use "GDAP/GDPR consent issues" (Level 2)
+
+Email Problems (Level 1):
+- Use only when email functionality is the primary issue
+- Avoid if email is just mentioned in passing
+
+License Issues (Level 1):
+- Use only when software licenses or activation are the main concern
+- Include specific license type issues in Level 2 selection
+
+Other (Level 1):
+- Use as fallback when issues don't clearly fit other categories
+- Ensure at least one "Other" Level 2 subcategory is selected
