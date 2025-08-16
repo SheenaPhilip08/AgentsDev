@@ -35,7 +35,6 @@ class EvaluationState(TypedDict):
     l1_reasoning: str
     l2_evaluation: str
     l2_reasoning: str
-    suggested_improvements: str
     comment: str
 
 def get_evaluation_prompt(generated_context):
@@ -62,11 +61,6 @@ Use the following topic hierarchy mentioned in the context to detrmine whether t
   - yes: All labels (for the respective level) are accurate and complete.
   - partially yes: At least one label is correct, but some are missing, extra, or slightly inaccurate.
   - no: Labels are wrong, irrelevant, or violate the topic hierarchy and rules.
-- **Topic Structure Improvements**: Based on this complaint and your evaluation, suggest specific improvements to the overall topic hierarchy that could enhance classification performance. Consider:
-  - Missing Level 1 or Level 2 categories that would better capture this type of issue
-  - Overlapping or confusing category definitions that should be clarified
-  - Suggested new subcategories or refinements to existing ones
-  - Rule modifications that would improve accuracy
 - Ensure the output is valid JSON with the exact structure shown below.
 
 Output in JSON format (use double quotes and proper JSON syntax):
@@ -74,8 +68,7 @@ Output in JSON format (use double quotes and proper JSON syntax):
   "l1_evaluation": "yes|partially yes|no",
   "l1_reasoning": "Explain why the Level 1 labels are accurate or not, based on the complaint and the topic definitions.",
   "l2_evaluation": "yes|partially yes|no",
-  "l2_reasoning": "Explain why the Level 2 labels are accurate or not, based on the complaint and the topic definitions.",
-  "suggested_improvements": "Based on this complaint, suggest specific improvements to the topic hierarchy structure that would enhance overall classification performance. If no improvements needed, state 'No improvements suggested for this case.'"
+  "l2_reasoning": "Explain why the Level 2 labels are accurate or not, based on the complaint and the topic definitions"
 }}}}
 """)
 
@@ -358,3 +351,132 @@ def evaluate_complaints(file_name: str, evaluation_prompt) -> pd.DataFrame:
         print(f"  {eval_type}: {count} ({count/total*100:.2f}%)" if total > 0 else f"  {eval_type}: 0 (0.00%)")
     
     return result_df
+
+def generate_improvement_suggestions(result_df: pd.DataFrame, generated_context: str) -> str:
+    """
+    Generate overall topic structure improvement suggestions based on all evaluations
+    """
+    if result_df.empty:
+        return "No data available for improvement analysis."
+    
+    # Analyze patterns in the evaluation results
+    l1_issues = result_df[result_df["L1_Evaluation"] != "yes"]
+    l2_issues = result_df[result_df["L2_Evaluation"] != "yes"]
+    
+    # Prepare summary data for the LLM
+    total_complaints = len(result_df)
+    l1_accuracy = len(result_df[result_df["L1_Evaluation"] == "yes"]) / total_complaints * 100
+    l2_accuracy = len(result_df[result_df["L2_Evaluation"] == "yes"]) / total_complaints * 100
+    
+    # Sample problematic cases
+    problem_cases = []
+    for _, row in l1_issues.head(5).iterrows():
+        problem_cases.append({
+            "summary": row["summary"][:200] + "..." if len(row["summary"]) > 200 else row["summary"],
+            "assigned_l1": row["assigned_l1"],
+            "assigned_l2": row["assigned_l2"],
+            "l1_reasoning": row["L1_Reasoning"],
+            "l2_reasoning": row["L2_Reasoning"]
+        })
+    
+    improvement_prompt = f"""
+You are an expert in topic classification systems. Based on the evaluation results of {total_complaints} customer complaints, provide recommendations to improve the overall topic hierarchy structure.
+
+**Current Performance:**
+- Level 1 Accuracy: {l1_accuracy:.1f}%
+- Level 2 Accuracy: {l2_accuracy:.1f}%
+
+**Current Topic Structure:**
+{generated_context}
+
+**Sample Problematic Cases:**
+{json.dumps(problem_cases, indent=2)}
+
+**Analysis Request:**
+Based on the performance data and problematic cases, provide specific recommendations to improve the topic classification system:
+
+1. **Missing Categories**: What new Level 1 or Level 2 topics should be added?
+2. **Overlapping Categories**: Which existing categories cause confusion and how should they be refined?
+3. **Definition Improvements**: How can category definitions be clarified?
+4. **Rule Modifications**: What tagging rules should be adjusted?
+5. **Structural Changes**: Should any categories be merged, split, or reorganized?
+
+Provide actionable recommendations that would improve classification accuracy and consistency.
+
+**Output Format:**
+Provide a clear, structured analysis with specific recommendations for improving the topic hierarchy.
+"""
+
+    try:
+        llm_client = ChatVertexAI(
+            model_name="gemini-1.5-flash", 
+            project=PROJECT_ID, 
+            location=LOCATION, 
+            temperature=0.3,  # Slightly higher for more creative suggestions
+            max_output_tokens=3000
+        )
+        
+        response = llm_client.invoke([HumanMessage(content=improvement_prompt)])
+        return response.content
+        
+    except Exception as e:
+        logger.error(f"Failed to generate improvement suggestions: {e}")
+        return f"Error generating improvement suggestions: {str(e)}"
+
+def run_evaluation_with_improvements(prompt_txt_file: str, excel_file: str) -> pd.DataFrame:
+    """
+    Run the complete evaluation process and generate improvement suggestions
+    """
+    print("Starting evaluation with improvement analysis...")
+    
+    # Generate context from prompt file
+    generated_context = read_prompt_and_summarize(prompt_txt_file)
+    evaluation_prompt = get_evaluation_prompt(generated_context)
+    
+    # Run the main evaluation
+    result_df = evaluate_complaints(excel_file, evaluation_prompt)
+    
+    if not result_df.empty:
+        print("\n" + "="*80)
+        print("TOPIC STRUCTURE IMPROVEMENT SUGGESTIONS")
+        print("="*80)
+        
+        # Generate improvement suggestions based on results
+        improvements = generate_improvement_suggestions(result_df, generated_context)
+        print(improvements)
+        
+        # Save improvements to file
+        with open("topic_improvement_suggestions.txt", "w") as f:
+            f.write("TOPIC STRUCTURE IMPROVEMENT SUGGESTIONS\n")
+            f.write("="*50 + "\n\n")
+            f.write(improvements)
+        
+        print(f"\nImprovement suggestions saved to: topic_improvement_suggestions.txt")
+    
+    return result_df
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Usage: python Evaluation.py <prompt_txt_file> <excel_file>")
+        print("Example: python Evaluation.py tagging_prompt.txt CleanedDatasets/trial.xlsx")
+        sys.exit(1)
+    
+    prompt_file = sys.argv[1]
+    excel_file = sys.argv[2]
+    
+    print(f"Running evaluation with improvement analysis:")
+    print(f"  Prompt file: {prompt_file}")
+    print(f"  Excel file: {excel_file}")
+    print("-" * 50)
+    
+    try:
+        result_df = run_evaluation_with_improvements(prompt_file, excel_file)
+        if not result_df.empty:
+            print(f"\nEvaluation completed successfully!")
+            print(f"Results saved to: evaluated_complaints_gemini.xlsx")
+            print(f"Improvement suggestions saved to: topic_improvement_suggestions.txt")
+        else:
+            print("No results generated. Check your input files and credentials.")
+    except Exception as e:
+        print(f"Error during evaluation: {e}")
+        sys.exit(1)
