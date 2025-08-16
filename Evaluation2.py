@@ -63,6 +63,8 @@ Assigned Level 2 topics: {{assigned_l2}}
   - **no**: Labels are wrong, irrelevant, or violate the topic hierarchy.
 - Do NOT provide recommendations, suggest alternative labels, or include any text outside the JSON object.
 - Return **only** a valid JSON object with the exact structure shown below. Do not include markdown (e.g., ```json), code fences, comments, explanations, or any additional text. Ensure the JSON is complete and properly formatted.
+- The response must be a complete, valid JSON object that starts with {{ and ends with }}.
+- Do not return partial responses, incomplete JSON, or just individual keys.
 
 **Output Format**:
 {{
@@ -71,6 +73,8 @@ Assigned Level 2 topics: {{assigned_l2}}
   "l2_evaluation": "yes|partially yes|no",
   "l2_reasoning": "Explain why the Level 2 labels are accurate or not, based on the complaint and topic definitions."
 }}
+
+**CRITICAL**: Your response must be EXACTLY in the above JSON format. Do not add any text before or after the JSON object.
 """)
 
 def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
@@ -110,19 +114,48 @@ def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
             if not response_content:
                 logger.warning(f"Empty response from {llm_type} LLM on attempt {attempt + 1}")
                 continue
+            
             # Remove markdown and common Gemini output artifacts
-            response_content = re.sub(r'^```json\s*|\s*```$', '', response_content, flags=re.MULTILINE).strip()
-            response_content = re.sub(r'^```.*?\n|\n```$', '', response_content, flags=re.MULTILINE).strip()
+            response_content = re.sub(r'^```json\s*', '', response_content, flags=re.MULTILINE)
+            response_content = re.sub(r'\s*```$', '', response_content, flags=re.MULTILINE)
+            response_content = re.sub(r'^```.*?\n', '', response_content, flags=re.MULTILINE)
+            response_content = re.sub(r'\n```.*?$', '', response_content, flags=re.MULTILINE)
+            response_content = response_content.strip()
+            
+            # Remove leading/trailing whitespace and newlines more aggressively
+            response_content = response_content.strip('\n\r\t ')
+            
+            # Handle the specific error pattern: '\n  "l1_evaluation"'
+            # This suggests the response is just a key fragment, not complete JSON
+            if re.match(r'^[\n\r\s]*"[^"]*"[\n\r\s]*$', response_content):
+                logger.warning(f"Response appears to be just a key fragment: '{response_content}'. Requesting retry.")
+                continue
+            
+            # More careful handling of leading/trailing quotes - only remove if not part of valid JSON
+            # Don't remove quotes if they're part of a valid JSON structure
+            if not (response_content.startswith('{') and response_content.endswith('}')):
+                # Only remove orphaned quotes at start/end if not valid JSON boundaries
+                if response_content.startswith('"') and not response_content.startswith('{"'):
+                    response_content = response_content[1:]
+                if response_content.endswith('"') and not response_content.endswith('"}'):
+                    response_content = response_content[:-1]
+            
             # Fix common JSON issues
             response_content = response_content.replace("'", '"')
             response_content = re.sub(r',([}\]])', r'\1', response_content)  # Remove trailing commas
-            response_content = re.sub(r'([{,]\s*)(\w+/\w+|\w+)(?=\s*:)', r'\1"\2"', response_content)  # Quote keys
+            response_content = re.sub(r'([{,]\s*)(\w+/\w+|\w+)(?=\s*:)', r'\1"\2"', response_content)  # Quote unquoted keys
             response_content = re.sub(r',\s*([}\]])', r'\1', response_content)  # Remove trailing commas before closing braces
             response_content = re.sub(r'"\s*,', r'",', response_content)  # Fix spaces before commas
+            
+            # Ensure proper JSON structure
             if not response_content.startswith('{'):
                 response_content = '{' + response_content
             if not response_content.endswith('}'):
                 response_content = response_content + '}'
+            
+            # Final cleanup: remove any remaining leading/trailing quotes outside braces
+            response_content = re.sub(r'^"*\{', '{', response_content)
+            response_content = re.sub(r'\}"*$', '}', response_content)
             logger.debug(f"Cleaned {llm_type} response (attempt {attempt + 1}): {response_content} (length: {len(response_content)})")
             
             # Validate JSON structure
@@ -138,8 +171,10 @@ def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
                 break  # Successful parse
             except json.JSONDecodeError as e:
                 logger.warning(f"JSONDecodeError on attempt {attempt + 1} for {llm_type} LLM, summary '{summary[:30]}...': {e}")
+                logger.warning(f"Raw response causing error: '{response_content[:200]}...'")
                 if attempt == max_retries - 1:
                     logger.error(f"Failed to parse JSON after {max_retries} attempts for {llm_type} LLM")
+                    logger.error(f"Final problematic response: '{response_content}'")
                     try:
                         # Fallback: Try parsing with ast.literal_eval
                         parsed = ast.literal_eval(response_content) if response_content else {}
