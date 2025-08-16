@@ -63,8 +63,9 @@ Assigned Level 2 topics: {{assigned_l2}}
   - **no**: Labels are wrong, irrelevant, or violate the topic hierarchy.
 - Do NOT provide recommendations, suggest alternative labels, or include any text outside the JSON object.
 - Return **only** a valid JSON object with the exact structure shown below. Do not include markdown (e.g., ```json), code fences, comments, explanations, or any additional text. Ensure the JSON is complete and properly formatted.
-- The response must be a complete, valid JSON object that starts with {{ and ends with }}.
+- The response must be a complete, valid JSON object that begins with a curly brace {{ and concludes with a curly brace }}.
 - Do not return partial responses, incomplete JSON, or just individual keys.
+- Do not include any text that references "starts with" or "ends with" in your response.
 
 **Output Format**:
 {{
@@ -74,7 +75,7 @@ Assigned Level 2 topics: {{assigned_l2}}
   "l2_reasoning": "Explain why the Level 2 labels are accurate or not, based on the complaint and topic definitions."
 }}
 
-**CRITICAL**: Your response must be EXACTLY in the above JSON format. Do not add any text before or after the JSON object.
+**CRITICAL**: Your response must be EXACTLY in the above JSON format. Do not add any text before or after the JSON object. Do not reference this instruction in your response. Simply provide the JSON object with the four required fields.
 """)
 
 def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
@@ -125,10 +126,19 @@ def evaluate_complaint(state: EvaluationState, config: Dict) -> EvaluationState:
             # Remove leading/trailing whitespace and newlines more aggressively
             response_content = response_content.strip('\n\r\t ')
             
-            # Handle the specific error pattern: '\n  "l1_evaluation"'
-            # This suggests the response is just a key fragment, not complete JSON
+            # Handle specific error patterns
+            # Pattern 1: '\n  "l1_evaluation"' - just a key fragment
             if re.match(r'^[\n\r\s]*"[^"]*"[\n\r\s]*$', response_content):
                 logger.warning(f"Response appears to be just a key fragment: '{response_content}'. Requesting retry.")
+                continue
+            
+            # Pattern 2: ' and ends with ' - LLM interpreting prompt instructions literally
+            # Be more specific to avoid false positives
+            if ((" and ends with " in response_content) or 
+                (response_content.strip() == "and ends with") or
+                (response_content.strip().startswith("starts with")) or
+                (response_content.strip().endswith("and ends with"))):
+                logger.warning(f"Response contains prompt instruction text: '{response_content[:100]}...'. Requesting retry.")
                 continue
             
             # More careful handling of leading/trailing quotes - only remove if not part of valid JSON
