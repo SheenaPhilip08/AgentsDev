@@ -5,59 +5,63 @@ This system classifies customer support interactions into hierarchical topics to
 LEVEL 1 TOPICS:
 
 1. Email Problems
-   - Issues related to email functionality, access, or configuration
+   - Covers all issues related to sending, receiving, and configuring email services.
 
 2. License Issues  
-   - Problems with software licensing, activation, or renewal
+   - Includes problems with license activation, allocation, cancellation, and renewal.
 
 3. Login Issues
-   - Authentication, password, and access credential problems
+   - Focuses on account access problems including credentials, MFA, and portal login.
 
 4. System & Access Issues
-   - System functionality, permissions, and general access problems
+   - Encompasses setup, permissions, and external communication restrictions.
 
 5. Technical & Communication Issues
-   - Technical difficulties, communication problems, and setup issues
+   - Relates to support handling, meeting coordination, and unresolved technical matters.
 
 6. Other
-   - Issues that don't fit into the above categories
+   - It is tagged as this when there are no other level 1's that feel relevant
 
 LEVEL 2 TOPICS:
 
 Email Problems:
-- Email delivery problems: Messages not being sent or received
-- Email configuration issues: Setup and account configuration problems
-- Email access problems: Cannot access email account or interface
-- Outlook/client issues: Problems with specific email clients
+- Missing or undelivered emails: Emails not received, sent to wrong address, or failing to deliver
+- Email setup/configuration issues: Problems with configuring email clients, forwarding, or syncing
+- Spam/incorrect routing: Legitimate emails marked as spam or routed incorrectly
+- Email address changes: Complications after changing email addresses in the system
+- Delayed email reception: Emails received late or after long delays
 - Other: Email-related issues not covered above
 
 License Issues:
-- License activation problems: Cannot activate or validate licenses
-- License renewal issues: Problems with license renewal process
-- License assignment problems: Issues assigning licenses to users
-- License compatibility issues: Software compatibility with current licenses
+- License activation problems: Failure to activate new or existing licenses
+- License cancellations/renewals: Requests or disputes over license cancellation or renewal
+- License allocation errors: Licenses assigned to wrong users or accounts
+- License key/GDPR consent issues: Missing license keys or required GDPR/GDAP approvals
+- Additional license requests: Need for more licenses to cover additional users
 - Other: License-related issues not covered above
 
 Login Issues:
-- Password resets & credentials: Password problems and credential issues
-- Account login/logout problems: General authentication difficulties
-- Service portal access issues: Problems accessing specific service portals
-- Multi-factor authentication issues: MFA setup or validation problems
+- Account login/logout problems: Trouble logging into or out of accounts
+- Password resets & credentials: Forgotten, expired, or incorrect passwords
+- Multi-factor authentication issues: Difficulties setting up or passing MFA prompts
+- Old/new account conflicts: Confusion or lockout caused by multiple account profiles
+- Service portal access issues: Unable to log into Vodafone's or Microsoft's service portals
 - Other: Login-related issues not covered above
 
 System & Access Issues:
-- GDAP/GDPR consent issues: Permission and consent-related problems
-- System performance problems: Slow or unresponsive systems
-- Data access issues: Problems accessing specific data or files
-- Permission/role issues: Insufficient permissions or role problems
+- GDAP/GDPR consent issues: Missing or incorrect admin consent emails for Vodafone/Microsoft access
+- External communication problems: Inability to chat, call, or collaborate with external organizations
+- Teams/Outlook access issues: Problems accessing Microsoft Teams or Outlook functionality
+- Data migration/setup requests: Assistance needed for tenant migration or initial setup
+- Device management restrictions: Access limited by Intune, Company Portal, or security policies
 - Other: System access issues not covered above
 
 Technical & Communication Issues:
-- Call/meeting availability problems: Issues with calls or meeting access
-- Setup or configuration difficulties: Technical setup and configuration issues
-- Delays & missing information: Information or response delays
-- Escalations & unresolved issues: Problems requiring escalation or remaining unresolved
-- Hardware/software problems: Technical equipment or software issues
+- Call/meeting availability problems: Delays or inability to connect with support or attend meetings
+- Setup or configuration difficulties: General technical issues with setup or configuration
+- Delays & missing information: Waiting on data, confirmations, or responses
+- Escalations & unresolved issues: Cases requiring escalation or remaining open without resolution
+- External communication failures: Failure to establish working contact with external parties
 - Other: Technical communication issues not covered above
 
 GENERAL TAGGING RULES:
